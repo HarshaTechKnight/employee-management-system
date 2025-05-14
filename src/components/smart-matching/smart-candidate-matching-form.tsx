@@ -25,7 +25,8 @@ const jobRoles = [
 ];
 
 export function SmartCandidateMatchingForm() {
-  const [resumeText, setResumeText] = useState("");
+  const [resumeDataUri, setResumeDataUri] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [selectedJobRole, setSelectedJobRole] = useState<string | undefined>(undefined);
   const [jobDescription, setJobDescription] = useState("");
   const [result, setResult] = useState<SmartCandidateMatchingOutput | null>(null);
@@ -36,11 +37,15 @@ export function SmartCandidateMatchingForm() {
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type === "text/plain" || file.type === "text/markdown" || file.name.endsWith(".md") || file.name.endsWith(".txt")) {
+      const allowedExtensions = ['.txt', '.md', '.pdf', '.doc', '.docx'];
+      const fileExtension = ('.' + file.name.split('.').pop()?.toLowerCase()) || "";
+
+      if (allowedExtensions.includes(fileExtension)) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const text = e.target?.result as string;
-          setResumeText(text);
+          const dataUri = e.target?.result as string;
+          setResumeDataUri(dataUri);
+          setSelectedFileName(file.name);
           toast({
             title: "Resume Uploaded",
             description: `${file.name} loaded successfully.`,
@@ -52,17 +57,19 @@ export function SmartCandidateMatchingForm() {
             description: "Could not read the resume file.",
             variant: "destructive",
           });
-          setResumeText("");
+          setResumeDataUri("");
+          setSelectedFileName("");
         };
-        reader.readAsText(file);
+        reader.readAsDataURL(file);
       } else {
         toast({
           title: "Invalid File Type",
-          description: "Please upload a .txt or .md file for the resume.",
+          description: `Please upload a ${allowedExtensions.join(', ')} file.`,
           variant: "destructive",
         });
-        setResumeText("");
-        event.target.value = ""; // Clear the file input
+        setResumeDataUri("");
+        setSelectedFileName("");
+        if (event.target) event.target.value = ""; // Clear the file input
       }
     }
   };
@@ -71,7 +78,7 @@ export function SmartCandidateMatchingForm() {
     setSelectedJobRole(role);
     setJobDescription("");
     setIsGeneratingJD(true);
-    setResult(null); // Clear previous analysis results
+    setResult(null); 
 
     try {
       const output = await generateJobDescription({ jobTitle: role });
@@ -94,7 +101,7 @@ export function SmartCandidateMatchingForm() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!resumeText.trim()) {
+    if (!resumeDataUri) {
       toast({
         title: "Resume Missing",
         description: "Please upload a candidate resume.",
@@ -116,7 +123,7 @@ export function SmartCandidateMatchingForm() {
 
     try {
       const output = await smartCandidateMatching({
-        candidateResume: resumeText,
+        resumeDataUri: resumeDataUri,
         jobDescription: jobDescription,
       });
       setResult(output);
@@ -146,7 +153,7 @@ export function SmartCandidateMatchingForm() {
               Smart Candidate Matching
             </CardTitle>
             <CardDescription>
-              Upload a resume and select a job role to assess candidate fit and generate interview questions.
+              Upload a resume (txt, md, pdf, doc, docx) and select a job role to assess candidate fit and generate interview questions.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -159,15 +166,14 @@ export function SmartCandidateMatchingForm() {
                   <Input
                     id="candidate-resume-upload"
                     type="file"
-                    accept=".txt,.md,text/plain,text/markdown"
+                    accept=".txt,.md,.pdf,.doc,.docx,text/plain,text/markdown,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={handleFileChange}
                     className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                     disabled={isLoadingAnalysis || isGeneratingJD}
                   />
-                  {resumeText && (
-                    <div className="mt-2 p-3 bg-muted/50 rounded-md border max-h-40 overflow-y-auto text-sm">
-                      <p className="font-semibold">Uploaded resume content (preview):</p>
-                      <pre className="whitespace-pre-wrap break-all">{resumeText.substring(0, 200)}{resumeText.length > 200 ? "..." : ""}</pre>
+                  {selectedFileName && (
+                    <div className="mt-2 p-3 bg-muted/50 rounded-md border text-sm">
+                      <p className="font-semibold">Selected file: {selectedFileName}</p>
                     </div>
                   )}
                 </div>
@@ -223,7 +229,7 @@ export function SmartCandidateMatchingForm() {
               <Button 
                 type="submit" 
                 className="w-full md:w-auto" 
-                disabled={isLoadingAnalysis || isGeneratingJD || !resumeText || !jobDescription}
+                disabled={isLoadingAnalysis || isGeneratingJD || !resumeDataUri || !jobDescription}
               >
                 {isLoadingAnalysis ? (
                   <>
