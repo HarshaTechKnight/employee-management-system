@@ -1,3 +1,4 @@
+
  "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,11 +14,13 @@ import {
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, UserCircle, ChevronDown } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "Dashboard";
   if (pathname.startsWith("/smart-matching")) return "Smart Candidate Matching";
+  if (pathname.startsWith("/profile")) return "Profile";
   return "TalentFlow";
 }
 
@@ -62,10 +65,14 @@ export function AppHeader() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                <UserCircle className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
+              <Link href="/profile" passHref legacyBehavior>
+                <DropdownMenuItem asChild>
+                  <a>
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </a>
+                </DropdownMenuItem>
+              </Link>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
