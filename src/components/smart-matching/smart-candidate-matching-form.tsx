@@ -1,39 +1,122 @@
- "use client";
+// src/components/smart-matching/smart-candidate-matching-form.tsx
+"use client";
 
-import { useState } from "react";
+import { useState, ChangeEvent, FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { smartCandidateMatching, type SmartCandidateMatchingOutput } from "@/ai/flows/smart-candidate-matching";
+import { generateJobDescription } from "@/ai/flows/generate-job-description-flow";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, HelpCircle } from "lucide-react";
+import { Loader2, Sparkles, HelpCircle, UploadCloud, FileText, Briefcase } from "lucide-react";
+
+const jobRoles = [
+  "Software Engineer",
+  "Product Manager",
+  "UX Designer",
+  "Data Analyst",
+  "Marketing Specialist",
+  "HR Manager",
+  "DevOps Engineer",
+  "Sales Representative",
+];
 
 export function SmartCandidateMatchingForm() {
-  const [resume, setResume] = useState("");
+  const [resumeText, setResumeText] = useState("");
+  const [selectedJobRole, setSelectedJobRole] = useState<string | undefined>(undefined);
   const [jobDescription, setJobDescription] = useState("");
   const [result, setResult] = useState<SmartCandidateMatchingOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [isGeneratingJD, setIsGeneratingJD] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resume.trim() || !jobDescription.trim()) {
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type === "text/plain" || file.type === "text/markdown" || file.name.endsWith(".md") || file.name.endsWith(".txt")) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          setResumeText(text);
+          toast({
+            title: "Resume Uploaded",
+            description: `${file.name} loaded successfully.`,
+          });
+        };
+        reader.onerror = () => {
+          toast({
+            title: "File Read Error",
+            description: "Could not read the resume file.",
+            variant: "destructive",
+          });
+          setResumeText("");
+        };
+        reader.readAsText(file);
+      } else {
+        toast({
+          title: "Invalid File Type",
+          description: "Please upload a .txt or .md file for the resume.",
+          variant: "destructive",
+        });
+        setResumeText("");
+        event.target.value = ""; // Clear the file input
+      }
+    }
+  };
+
+  const handleJobRoleChange = async (role: string) => {
+    setSelectedJobRole(role);
+    setJobDescription("");
+    setIsGeneratingJD(true);
+    setResult(null); // Clear previous analysis results
+
+    try {
+      const output = await generateJobDescription({ jobTitle: role });
+      setJobDescription(output.jobDescription);
       toast({
-        title: "Input Required",
-        description: "Please provide both candidate resume and job description.",
+        title: "Job Description Generated",
+        description: `JD for ${role} created successfully.`,
+      });
+    } catch (error) {
+      console.error("Job Description Generation Error:", error);
+      toast({
+        title: "JD Generation Failed",
+        description: "Could not generate job description. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingJD(false);
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!resumeText.trim()) {
+      toast({
+        title: "Resume Missing",
+        description: "Please upload a candidate resume.",
         variant: "destructive",
       });
       return;
     }
+    if (!jobDescription.trim()) {
+        toast({
+          title: "Job Description Missing",
+          description: "Please select a job role to generate a job description.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    setIsLoading(true);
+    setIsLoadingAnalysis(true);
     setResult(null);
 
     try {
       const output = await smartCandidateMatching({
-        candidateResume: resume,
+        candidateResume: resumeText,
         jobDescription: jobDescription,
       });
       setResult(output);
@@ -49,7 +132,7 @@ export function SmartCandidateMatchingForm() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLoadingAnalysis(false);
     }
   };
 
@@ -63,39 +146,86 @@ export function SmartCandidateMatchingForm() {
               Smart Candidate Matching
             </CardTitle>
             <CardDescription>
-              AI-powered tool to assess candidate fit and generate interview questions.
+              Upload a resume and select a job role to assess candidate fit and generate interview questions.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="candidate-resume" className="text-lg font-medium">Candidate Resume</Label>
-                  <Textarea
-                    id="candidate-resume"
-                    placeholder="Paste candidate's resume here..."
-                    value={resume}
-                    onChange={(e) => setResume(e.target.value)}
-                    rows={12}
-                    className="resize-none"
-                    disabled={isLoading}
+                  <Label htmlFor="candidate-resume-upload" className="text-lg font-medium flex items-center gap-2">
+                    <UploadCloud className="h-5 w-5" /> Candidate Resume
+                  </Label>
+                  <Input
+                    id="candidate-resume-upload"
+                    type="file"
+                    accept=".txt,.md,text/plain,text/markdown"
+                    onChange={handleFileChange}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    disabled={isLoadingAnalysis || isGeneratingJD}
                   />
+                  {resumeText && (
+                    <div className="mt-2 p-3 bg-muted/50 rounded-md border max-h-40 overflow-y-auto text-sm">
+                      <p className="font-semibold">Uploaded resume content (preview):</p>
+                      <pre className="whitespace-pre-wrap break-all">{resumeText.substring(0, 200)}{resumeText.length > 200 ? "..." : ""}</pre>
+                    </div>
+                  )}
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="job-description" className="text-lg font-medium">Job Description</Label>
-                  <Textarea
-                    id="job-description"
-                    placeholder="Paste job description here..."
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                    rows={12}
-                    className="resize-none"
-                    disabled={isLoading}
-                  />
+                  <Label htmlFor="job-role-select" className="text-lg font-medium flex items-center gap-2">
+                    <Briefcase className="h-5 w-5" /> Select Job Role
+                  </Label>
+                  <Select
+                    value={selectedJobRole}
+                    onValueChange={handleJobRoleChange}
+                    disabled={isLoadingAnalysis || isGeneratingJD}
+                  >
+                    <SelectTrigger id="job-role-select">
+                      <SelectValue placeholder="Choose a job role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jobRoles.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>
-                {isLoading ? (
+
+              {isGeneratingJD && (
+                <div className="space-y-2 mt-4 p-4 border rounded-md bg-muted/30">
+                  <div className="flex items-center justify-center text-muted-foreground">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <span>Generating Job Description for {selectedJobRole}...</span>
+                  </div>
+                </div>
+              )}
+
+              {jobDescription && !isGeneratingJD && (
+                <Card className="mt-4 bg-muted/30">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary"/> Generated Job Description
+                    </CardTitle>
+                    <CardDescription>For role: {selectedJobRole}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="p-3 bg-background rounded-md border max-h-60 overflow-y-auto text-sm">
+                      <pre className="whitespace-pre-wrap break-all">{jobDescription}</pre>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              <Button 
+                type="submit" 
+                className="w-full md:w-auto" 
+                disabled={isLoadingAnalysis || isGeneratingJD || !resumeText || !jobDescription}
+              >
+                {isLoadingAnalysis ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Analyzing...
@@ -112,7 +242,7 @@ export function SmartCandidateMatchingForm() {
         </Card>
 
         {result && (
-          <Card className="shadow-xl">
+          <Card className="shadow-xl mt-6">
             <CardHeader>
               <CardTitle className="text-xl">Analysis Results</CardTitle>
             </CardHeader>
@@ -134,7 +264,6 @@ export function SmartCandidateMatchingForm() {
                   className="mt-2 p-4 bg-muted/50 rounded-md border"
                 >
                   {result.suggestedQuestions.split('\n').map((line, index) => (
-                      // Assuming questions might be numbered or bulleted
                       <p key={index} className={`text-sm ${line.trim().startsWith('-') || /^\d+\./.test(line.trim()) ? 'ml-4' : ''}`}>{line || <br/>}</p>
                   ))}
                 </div>
